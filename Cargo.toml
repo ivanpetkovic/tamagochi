@@ -1,5 +1,5 @@
 [workspace]
-members = [ "packages/food"]
+members = [ "contracts/market", "contracts/pet", "packages/food"]
 
 [profile.release]
 opt-level = 3

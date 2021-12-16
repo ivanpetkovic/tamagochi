@@ -5,6 +5,19 @@ command -v shellcheck > /dev/null && shellcheck "$0"
 
 export PATH="$PATH:/root/.cargo/bin"
 
+# 1. install wasm-opt: sudo apt-get install binaryen
+
+# 2. make sure rustup targets are added:
+
+# rustup default stable
+# rustup target list --installed
+# rustup target add wasm32-unknown-unknown
+
+# rustup install nightly
+# rustup target add wasm32-unknown-unknown --toolchain nightly
+
+# 3. install clang sudo apt install clang
+
 # Suffix for non-Intel built artifacts
 MACHINE=$(uname -m)
 SUFFIX=${MACHINE#x86_64}
