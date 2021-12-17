@@ -4,6 +4,7 @@ use cosmwasm_std::{
 };
 
 use crate::msg::{HandleMsg, InitMsg, QueryMsg, GetFoodBalanceResponse};
+
 use crate::state::{config, config_read, State};
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
@@ -11,10 +12,15 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     env: Env,
     msg: InitMsg,
 ) -> StdResult<InitResponse> {
+    // food token contract info is saved in token prop.
     let state = State {
         owner: deps.api.canonical_address(&env.message.sender)?,
+        token: msg.token
     };
 
+    // pass market address as a minter
+
+    
     config(&mut deps.storage).save(&state)?;
 
     debug_print!("Contract was initialized by {}", env.message.sender);

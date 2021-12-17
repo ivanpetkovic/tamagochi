@@ -1,4 +1,5 @@
 use std::ops::Add;
+use std::time::Duration;
 
 use cosmwasm_std::{
     debug_print, to_binary, Api, Binary, Env, Extern, HandleResponse, InitResponse, Querier,
@@ -32,24 +33,25 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
 ) -> StdResult<HandleResponse> {
     match msg {
         HandleMsg::Feed {amount} => {
-            
+            let time = env.block.time;
             try_feed(amount, &mut deps.storage, &env)
         }
     }
 }
+type Seconds = Duration;
 
 pub fn try_feed<S: Storage>(amount: u32, storage: &mut S, env: &Env) -> StdResult<HandleResponse> {
-    let time = get_current_time(env);
+    let time =  env.block.time;
+    
     pet(storage).update(|state| {
+        let duration: Seconds = Duration::new(time - state.last_feed_time, 0);
+        
+        println!("Hours since fed {}", duration.as_secs() / 360);
         Ok(state)
     });
     Ok(HandleResponse::default())
 }
 
-/// Gets approximation of the current time, more specificaly timestamp of the last block in the chain
-fn get_current_time(env: &Env) -> u64 {
-    env.block.time
-}
 
 // pub fn try_increment<S: Storage, A: Api, Q: Querier>(
 //     deps: &mut Extern<S, A, Q>,
@@ -70,11 +72,11 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
     msg: QueryMsg,
 ) -> StdResult<Binary> {
-    match msg {
-        //QueryMsg::CanEat {} => to_binary(&query_count(deps)?),
-        QueryMsg::CanEat {} => to_binary(&can_eat(deps)?),
-        QueryMsg::IsHungry {} => to_binary( &is_hungry(deps)?)
-    }
+    // match msg {
+    //     QueryMsg::CanEat {} => to_binary(&can_eat(deps)?),
+    //     QueryMsg::IsHungry {} => to_binary( &is_hungry(deps)?)
+    // }
+    Ok(to_binary("test")?)
 }
 
 fn can_eat<S:Storage, A:Api, Q:Querier>(deps: &Extern<S, A, Q>) -> StdResult<bool> {
