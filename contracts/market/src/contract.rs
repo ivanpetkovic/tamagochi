@@ -1,29 +1,34 @@
 use cosmwasm_std::{
-    debug_print, to_binary, Api, Binary, Env, Extern, HandleResponse, InitResponse, Querier,
-    StdError, StdResult, Storage,
+    to_binary, Api, Binary, Env, Extern, HandleResponse, InitResponse, Querier,
+    StdError, StdResult, Storage, Coin, HumanAddr, Uint128,
 };
+use crate::msg::{HandleMsg, InitMsg, QueryMsg};
+use crate::state::{config, config_read, State, TokenInfo};
+use secret_toolkit::snip20;
 
-use crate::msg::{HandleMsg, InitMsg, QueryMsg, GetFoodBalanceResponse};
-
-use crate::state::{config, config_read, State};
+const TOKEN_DENOM: &str  = "uscrt";
+/// Ammount of food tokens you can get for 1 SCRT
+const DEFAULT_EXCHANGE_RATE: u64 = 100;
+const BLOCK_SIZE: usize = 256;
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
     msg: InitMsg,
 ) -> StdResult<InitResponse> {
-    // food token contract info is saved in token prop.
     let state = State {
         owner: deps.api.canonical_address(&env.message.sender)?,
-        token: msg.token
+        token: TokenInfo {
+            address: HumanAddr::from(msg.token_address),
+            code_hash: msg.token_code_hash
+        },
+        exchange_rate: msg.exchange_rate.unwrap_or(DEFAULT_EXCHANGE_RATE)
     };
-
-    // pass market address as a minter
-
+    // market contract should be added as a food token minter
     
     config(&mut deps.storage).save(&state)?;
 
-    debug_print!("Contract was initialized by {}", env.message.sender);
+    println!("Contract was initialized by {}", env.message.sender);
 
     Ok(InitResponse::default())
 }
@@ -34,12 +39,32 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     msg: HandleMsg,
 ) -> StdResult<HandleResponse> {
     match msg {
-        HandleMsg::BuyFood {amount} => try_buy_food(amount)
+        HandleMsg::BuyFood => try_buy_food(deps, &env)
     }
 }
 
-pub fn try_buy_food(amount: u32) -> StdResult<HandleResponse> {
-    Ok(HandleResponse::default())
+pub fn try_buy_food<S: Storage, A: Api, Q: Querier>(deps: &mut Extern<S, A, Q>, env: &Env) -> StdResult<HandleResponse> {
+    let sender = &env.message.sender;
+    let sent_scrt_funds = env.message.sent_funds.iter()
+        .find(|coin: &&Coin| (&coin).denom == TOKEN_DENOM )
+        .unwrap()
+        .amount;
+    let state = config_read(&deps.storage).load()?;
+    let food_amount = Uint128::from(sent_scrt_funds.u128() * state.exchange_rate as u128);
+    let buy_message = snip20::transfer_msg(
+        sender.clone(), 
+        food_amount, 
+        None, 
+        BLOCK_SIZE,
+        state.token.code_hash.clone(), 
+        state.token.address.clone()
+    )?;
+    // let 
+    Ok(HandleResponse {
+        messages: vec![buy_message],
+        log: vec![],
+        data: None
+    })
 }
 
 
@@ -48,14 +73,10 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
     msg: QueryMsg,
 ) -> StdResult<Binary> {
     match msg {
-        QueryMsg::GetFoodBalance {} => to_binary(&query_food_balance(deps)?),
+        // QueryMsg::GetFoodBalance {} => to_binary(&query_food_balance(deps)?),
     }
 }
 
-fn query_food_balance<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<GetFoodBalanceResponse> {
-    let state = config_read(&deps.storage).load()?;
-    Ok(GetFoodBalanceResponse { balance: 100 })
-}
 
 #[cfg(test)]
 mod tests {

@@ -1,58 +1,33 @@
+read -p "Did you temporarly rename worspace Cargo.toml?"
+
 #!/bin/bash
 set -o errexit -o nounset -o pipefail
 command -v shellcheck > /dev/null && shellcheck "$0"
-# See https://www.shellcheck.net/wiki/SC2187
 
-export PATH="$PATH:/root/.cargo/bin"
 
-# 1. install wasm-opt: sudo apt-get install binaryen
+echo "Building  and optimizing contracts"
 
-# 2. make sure rustup targets are added:
+# iterate over all folders in contracts and packages dir then cnd and run cargo wasm
 
-# rustup default stable
-# rustup target list --installed
-# rustup target add wasm32-unknown-unknown
+for DIR in contracts packages; do
+    for D in "$DIR"/*; do
+        if [ -d "$D" ]; then
+            (
+                cd "$D"
+                echo "Building $D"
+                cargo build --release --target wasm32-unknown-unknown
+                echo "Building complete"
 
-# rustup install nightly
-# rustup target add wasm32-unknown-unknown --toolchain nightly
+                echo "Optimzing $D"
+                docker run --rm -v "$(pwd)":/contract \
+                    --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
+                    --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
+                     enigmampc/secret-contract-optimizer  
 
-# 3. install clang sudo apt install clang
+                echo "Optimizing complete"    
+            )
+        fi
+    done
+done
 
-# Suffix for non-Intel built artifacts
-MACHINE=$(uname -m)
-SUFFIX=${MACHINE#x86_64}
-SUFFIX=${SUFFIX:+-$SUFFIX}
-
-rustup toolchain list
-cargo --version
-
-rm -rf artifacts
-mkdir -p artifacts
-
-echo "Building contracts"
-
-RUSTFLAGS='-C link-arg=-s' cargo build --release --target wasm32-unknown-unknown --locked
-
-echo "Optimizing artifacts in workspace ..."
-
-TMPARTIFACTS=$(mktemp -p "$(pwd)" -d artifacts.XXXXXX)
-# Optimize artifacts
-(
-  cd "$TMPARTIFACTS"
-
-  for WASM in ../target/wasm32-unknown-unknown/release/*.wasm; do
-    NAME=$(basename "$WASM" .wasm)${SUFFIX}.wasm
-    echo "Optimizing $NAME ..."
-    wasm-opt -Oz "$WASM" -o "$NAME"
-  done
-  echo "Moving wasm files ..."
-  mv ./*.wasm ../artifacts
-)
-rm -rf "$TMPARTIFACTS"
-echo "Post-processing artifacts in workspace ..."
-(
-  cd artifacts
-  sha256sum -- *.wasm | tee checksums.txt
-)
-
-echo "done"
+echo "Build and optimization complete. "

@@ -1,13 +1,18 @@
 use std::ops::Add;
 use std::time::Duration;
+use secret_toolkit::snip20;
 
 use cosmwasm_std::{
-    debug_print, to_binary, Api, Binary, Env, Extern, HandleResponse, InitResponse, Querier,
-    StdError, StdResult, Storage,
+    to_binary, Api, Binary, Env, Extern, HandleResponse, InitResponse, Querier,
+    StdError, StdResult, Storage, HumanAddr, Uint128,
 };
 
-use crate::msg::{HandleMsg, InitMsg, QueryMsg};
-use crate::state::{pet, pet_read, State};
+use crate::msg::{HandleMsg, InitMsg, QueryMsg, Hours, Minutes};
+use crate::state::{pet, pet_read, State, TokenInfo};
+
+const BLOCK_SIZE: usize = 256;
+const DEFAULT_SATIATED_TIME: Hours = 3;
+const DEFAULT_STARVING_TIME: Hours = 1;
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
@@ -16,14 +21,31 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
 ) -> StdResult<InitResponse> {
     let state = State {
         last_feed_time: env.block.time,
+        satiated_interval: msg.satiated_interval.unwrap_or(DEFAULT_SATIATED_TIME),
+        starving_interval: msg.starving_interval.unwrap_or(DEFAULT_STARVING_TIME),
         owner: deps.api.canonical_address(&env.message.sender)?,
+        token_info: TokenInfo {
+            address: HumanAddr(msg.token_address.clone()),
+            code_hash: msg.token_code_hash.clone()
+        }
     };
 
     pet(&mut deps.storage).save(&state)?;
 
-    debug_print!("Pet was born and fed, thanks to {}", env.message.sender);
+    println!("Pet was born and fed, thanks to {}", env.message.sender);
+    let pet_contract_hash = &env.contract_code_hash;
+    let callback = snip20::register_receive_msg(
+        pet_contract_hash.clone(),
+        None,
+        BLOCK_SIZE, 
+        msg.token_code_hash.clone(),
+        HumanAddr(msg.token_address.clone())
+    )?;
 
-    Ok(InitResponse::default())
+    Ok(InitResponse {
+        messages: vec![callback],
+        log: vec![]
+    })
 }
 
 pub fn handle<S: Storage, A: Api, Q: Querier>(
@@ -32,41 +54,44 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     msg: HandleMsg,
 ) -> StdResult<HandleResponse> {
     match msg {
-        HandleMsg::Feed {amount} => {
-            let time = env.block.time;
-            try_feed(amount, &mut deps.storage, &env)
-        }
+        HandleMsg::Receive {
+            sender, 
+            from, 
+            amount,
+            ..
+        } => try_feed( &mut deps.storage, &env, sender, amount)
     }
 }
-type Seconds = Duration;
 
-pub fn try_feed<S: Storage>(amount: u32, storage: &mut S, env: &Env) -> StdResult<HandleResponse> {
+pub fn try_feed<S: Storage>(storage: &mut S, env: &Env, sender: HumanAddr, amount: Uint128) -> StdResult<HandleResponse> {
     let time =  env.block.time;
-    
-    pet(storage).update(|state| {
-        let duration: Seconds = Duration::new(time - state.last_feed_time, 0);
-        
-        println!("Hours since fed {}", duration.as_secs() / 360);
+    if is_dead(storage, time)? {
+        return Err(StdError::generic_err("Pet is dead :("));
+    }
+    if !is_hungry(storage, time)? {
+        return Err(StdError::generic_err("Pet is not hungry"));
+    }
+    let _ = pet(storage).update(|mut state| {
+        state.last_feed_time = time;
+        println!("Pet has been fed");
         Ok(state)
-    });
+    })?;
     Ok(HandleResponse::default())
 }
 
+fn to_seconds(interval: Hours) -> u64 {
+    (interval * 60 * 60) as u64
+}
 
-// pub fn try_increment<S: Storage, A: Api, Q: Querier>(
-//     deps: &mut Extern<S, A, Q>,
-//     _env: Env,
-// ) -> StdResult<HandleResponse> {
-//     pet(&mut deps.storage).update(|mut state| {
-//         state.count += 1;
-//         debug_print!("count = {}", state.count);
-//         Ok(state)
-//     })?;
+fn is_dead<S: Storage>(storage: &S, current_time: u64) -> StdResult<bool> {
+    let state = pet_read(storage).load()?;
+    Ok(state.last_feed_time + to_seconds(state.satiated_interval) + to_seconds(state.starving_interval) < current_time) 
+}
 
-//     debug_print("count incremented successfully");
-//     Ok(HandleResponse::default())
-// }
-
+fn is_hungry<S: Storage>(storage: &S, current_time: u64) -> StdResult<bool> {
+    let state = pet_read(storage).load()?;
+    Ok(state.last_feed_time + to_seconds(state.satiated_interval) < current_time)
+}
 
 pub fn query<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
@@ -79,16 +104,16 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
     Ok(to_binary("test")?)
 }
 
-fn can_eat<S:Storage, A:Api, Q:Querier>(deps: &Extern<S, A, Q>) -> StdResult<bool> {
-    Ok(true)
-}
+// fn can_eat<S:Storage, A:Api, Q:Querier>(deps: &Extern<S, A, Q>) -> StdResult<bool> {
+//     Ok(true)
+// }
 
-fn is_hungry<S:Storage, A:Api, Q:Querier>(deps: &Extern<S, A, Q>) -> StdResult<bool> {
-    let state = pet_read(&deps.storage).load()?;
-    // deps.
-    // state.last_feed_time
-    Ok(true)
-}
+// fn is_hungry<S:Storage, A:Api, Q:Querier>(deps: &Extern<S, A, Q>) -> StdResult<bool> {
+//     let state = pet_read(&deps.storage).load()?;
+//     // deps.
+//     // state.last_feed_time
+//     Ok(true)
+// }
 
 #[cfg(test)]
 mod tests {

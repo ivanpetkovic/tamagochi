@@ -58,9 +58,8 @@ Or use the Secret Network's optimizer for each contract manually. (if the above 
 
 The optimized contracts are generated in the artifacts/ directory.
 
-## Using the contracts
+# Setting up the contracts
 
-**Note: section is a WIP**
 _Make sure to upload all contracts first_
 
 1. Create an instance of the Food contract using the following init message:
@@ -78,11 +77,23 @@ _Make sure to upload all contracts first_
 }
 ```
 
-2. Create an instance of the Market contract using the following init message:
-   _TODO_
-3. Create an instance of the Pet contract
+2. Create an instance of the Market contract suppying a Food contract as a token contract,  using the following init message:
+3. Add Market contract as minter for Food contract
+4. Create an instance of the Pet contract
     _TODO_
 
-## Playing rules
+# Idea
 
-_TODO_
+## Bying Food tokens
+
+1. User sends SCRT to Market contract (Handle::BuyFood)
+2. Market contract will add given SCRT to the overall balance, and deduct them from the user's balance.
+3. Market's response has message to Food contract to mint ceratain amount of tokens to the user's address
+
+## Feeding a pet
+
+1. Users sends Food token to the Pet contract (Handle::Feed)
+2. Pet contract will check the user's balance using the supplied view key. Abort if insufficent food for feeding (1 feeding = 100 Food)
+3. Pet contract will try to feed the pet. If not possible, abort.
+4. If pet is fed, send message to the Food contract to burn the user's Food tokens. If user sent more than 100 tokens, burn them anyways
+
