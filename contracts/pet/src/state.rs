@@ -1,13 +1,15 @@
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{CanonicalAddr, Storage, HumanAddr};
-use cosmwasm_storage::{singleton, singleton_read, ReadonlySingleton, Singleton};
+use cosmwasm_std::{CanonicalAddr, Storage, HumanAddr, ReadonlyStorage};
+use cosmwasm_storage::{singleton, singleton_read, ReadonlySingleton, Singleton, PrefixedStorage};
 
 use crate::msg::Hours;
 
 pub static PET_KEY: &[u8] = b"pet";
 pub static CONFIG_KEY: &[u8] = b"config";
+pub const PREFIX_PETS: &[u8] = b"pets";
 
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -26,7 +28,12 @@ pub struct State {
     pub token_info: TokenInfo
 }
 
-
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Pet {
+    pub name: String,
+    pub color: String,
+    pub last_fed_time: u64,
+}
 
 pub fn config<S: Storage>(storage: &mut S) -> Singleton<S, State> {
     singleton(storage, PET_KEY)
@@ -43,4 +50,41 @@ pub fn pet<S: Storage>(storage: &mut S) -> Singleton<S, State> {
 pub fn pet_read<S: Storage>(storage: &S) -> ReadonlySingleton<S, State> {
     singleton_read(storage, PET_KEY)
 
+}
+pub struct Pets<'a, S: Storage> {
+    storage: PrefixedStorage<'a, S>,
+}
+
+/// This was the only way to prevent code duplication of these methods because of the way
+/// that `ReadonlyPrefixedStorage` and `PrefixedStorage` are implemented in `cosmwasm-std`
+struct ReadonlyPetsImpl<'a, S: ReadonlyStorage>(&'a S);
+
+impl<'a, S: ReadonlyStorage> ReadonlyPetsImpl<'a, S> {
+    pub fn get(&self, account: &CanonicalAddr) -> Pet {
+        let account_bytes = account.as_slice();
+        let result = self.0.get(account_bytes).unwrap();
+        let decoded: Pet = bincode2::deserialize(&result).unwrap();
+        decoded
+    }
+}
+
+impl<'a, S: Storage> Pets<'a, S> {
+    pub fn from_storage(storage: &'a mut S) -> Self {
+        Self {
+            storage: PrefixedStorage::new(PREFIX_PETS, storage),
+        }
+    }
+
+    fn as_readonly(&self) -> ReadonlyPetsImpl<PrefixedStorage<S>> {
+        ReadonlyPetsImpl(&self.storage)
+    }
+
+    pub fn get_pet(&self, account: &CanonicalAddr) -> Pet {
+        self.as_readonly().get(account)
+    }
+
+    pub fn set_pet(&mut self, account: &CanonicalAddr, pet: &Pet) {
+        let serialized = bincode2::serialize(pet).unwrap();
+        self.storage.set(account.as_slice(), &serialized)
+    }
 }
