@@ -91,9 +91,9 @@ pub fn try_feed<S: Storage>(
         amount,
         None,
         BLOCK_SIZE,
-        state.token_info.code_hash,
-        state.token_info.address,
-    );
+        state.token_info.code_hash.clone(),
+        state.token_info.address.clone(),
+    )?;
     Ok(HandleResponse {
         messages: vec![burn_msg],
         log: vec![log("current_time", time), log("is_hungry", time)],
