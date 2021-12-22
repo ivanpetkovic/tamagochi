@@ -37,7 +37,7 @@ pub fn config_read<S: Storage>(storage: &S) -> ReadonlySingleton<S, State> {
 }
 
 pub fn pet<S: Storage>(storage: &mut S) -> Singleton<S, State> {
-    singleton(storage, CONFIG_KEY)
+    singleton(storage, PET_KEY)
 }
 
 pub fn pet_read<S: Storage>(storage: &S) -> ReadonlySingleton<S, State> {

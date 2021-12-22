@@ -1,0 +1,7 @@
+USER_ADDRES="secret14g94na5ctv25qh73mxjf7h0kxa8azp5qzvgjfl"
+FOOD_ADDRESS="secret18vd8fpwxzck93qlwghaj6arh4p7c5n8978vsyg"
+FOOD_CODE_HASH="E6687CD1C4E4ED16712CD7BD4CED08D7E01E7A95E6EA459773BF0C1851F2BA7F"
+MARKET_ADDRESS="secret10pyejy66429refv3g35g2t7am0was7ya6hvrzf"
+PET_ADDRESS="secret1xzlgeyuuyqje79ma6vllregprkmgwgavk8y798"
+
+VIEWING_KEY="api_key_fhd9zQmiHP2N16fCzZKjHL1xbZSApxiSonHiaFUoQeE="

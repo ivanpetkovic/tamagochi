@@ -25,11 +25,8 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
         exchange_rate: msg.exchange_rate.unwrap_or(DEFAULT_EXCHANGE_RATE)
     };
     // market contract should be added as a food token minter
-    
     config(&mut deps.storage).save(&state)?;
-
     println!("Contract was initialized by {}", env.message.sender);
-
     Ok(InitResponse::default())
 }
 
@@ -39,7 +36,7 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     msg: HandleMsg,
 ) -> StdResult<HandleResponse> {
     match msg {
-        HandleMsg::BuyFood => try_buy_food(deps, &env)
+        HandleMsg::BuyFood {} => try_buy_food(deps, &env)
     }
 }
 
@@ -49,9 +46,10 @@ pub fn try_buy_food<S: Storage, A: Api, Q: Querier>(deps: &mut Extern<S, A, Q>, 
         .find(|coin: &&Coin| (&coin).denom == TOKEN_DENOM )
         .unwrap()
         .amount;
+    // throw error for zero to abort transaction
     let state = config_read(&deps.storage).load()?;
     let food_amount = Uint128::from(sent_scrt_funds.u128() * state.exchange_rate as u128);
-    let buy_message = snip20::transfer_msg(
+    let mint_message = snip20::mint_msg(
         sender.clone(), 
         food_amount, 
         None, 
@@ -59,9 +57,8 @@ pub fn try_buy_food<S: Storage, A: Api, Q: Querier>(deps: &mut Extern<S, A, Q>, 
         state.token.code_hash.clone(), 
         state.token.address.clone()
     )?;
-    // let 
     Ok(HandleResponse {
-        messages: vec![buy_message],
+        messages: vec![mint_message],
         log: vec![],
         data: None
     })
