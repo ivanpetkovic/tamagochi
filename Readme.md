@@ -35,6 +35,24 @@ Fast forward 20 years. Lets implement a basic Tamagochi logic.
 | [`Food`](packages/Food)      | Snip-20 contract, used to create the token     |
 | [`Pet`](contracts/Pet)       | Tamagotchi like interface through the contract |
 
+
+# Idea
+
+## Buying Food tokens
+
+1. User sends SCRT to Market contract (Handle::BuyFood)
+2. Market contract will add given SCRT to the overall balance, and deduct them from the user's balance.
+3. Market's response contains a message to Food contract to mint ceratain amount of tokens to the user's address
+
+## Feeding a pet
+
+1. Users sends Food tokens via Food contract to Pet contract
+2. Pet contract will check the user's balance using the supplied view key. Abort if insufficent food for feeding (1 feeding = 100 Food)
+3. Pet contract will try to feed the pet. If not possible, abort.
+4. If pet is fed, send message to the Food contract to burn the user's Food tokens. If user sent more than 100 tokens, burn them anyways
+
+# Usage
+
 ## Building the contracts
 
 To start building run:
@@ -54,46 +72,73 @@ docker run --rm -v "$(pwd)":/code \
   cosmwasm/workspace-optimizer:0.12.3
 ```
 
-Or use the Secret Network's optimizer for each contract manually. (if the above does not work)
+Or use the Secret Network's optimizer for each contract manually. (if the above does not work). You can use script optimize.sh to do that \
+for each contract. Keep in mind that workspace atifacts, like top-level Cargo.toml and target folder must be deleted. This will in turn disable \ 
+rust-analyzer plugin in VCS, used in dev. 
 
-The optimized contracts are generated in the artifacts/ directory.
+Make sure to build contract after removing above mentioned items.
 
-# Setting up the contracts
+## Starting the local test blockchain
 
-_Make sure to upload all contracts first_
+You can start local blockchain inside docker using
 
-1. Create an instance of the Food contract using the following init message:
+```
+   ./scripts/start.sh
+```
+Open a separate terminal and enter the container using the 
 
-```javascript
-{
-   "name":"Food",
-   "symbol":"FDT",
-   "decimals":2, // for a conversion of 1/100
-   "prng_seed":<random_string>,
-   "config":{
-      "enable_mint":true, //to be used from the market
-      "enable_burn":true
-   }
-}
+```
+   docker exec -it secretdev /bin/bash
+   cd code/scripts
 ```
 
-2. Create an instance of the Market contract suppying a Food contract as a token contract,  using the following init message:
-3. Add Market contract as minter for Food contract
-4. Create an instance of the Pet contract
-    _TODO_
+## Setting up the contracts
 
-# Idea
+1. Make sure to upload all contracts first by using the upload.sh script. Provided you are inside the container at code/scripts, run:
+```
+   ./upload.sh ../package/food/contract.wasm.gz
+   ./upload.sh ../contract/market/contract.wasm.gz
+   ./upload.sh ../contract/pet/contract.wasm.gz
+```
 
-## Bying Food tokens
+2. Create an instance of the Food contract using the following init message:
 
-1. User sends SCRT to Market contract (Handle::BuyFood)
-2. Market contract will add given SCRT to the overall balance, and deduct them from the user's balance.
-3. Market's response has message to Food contract to mint ceratain amount of tokens to the user's address
+```
+   ./scripts/create_food.sh <food_code_id>
+```
+3. Edit ./scripts/_config.sh and enter food contract's address and code hash
+4. Create an instance of the Market contract suppying a Food contract as a token contract,  using the following init script:
 
-## Feeding a pet
+```
+   ./scripts/create_market.sh <market_code_id>
+```
+5. Edit ./scripts/_config.sh and enter market contract's address
+6. Add Market contract as minter for Food contract
 
-1. Users sends Food token to the Pet contract (Handle::Feed)
-2. Pet contract will check the user's balance using the supplied view key. Abort if insufficent food for feeding (1 feeding = 100 Food)
-3. Pet contract will try to feed the pet. If not possible, abort.
-4. If pet is fed, send message to the Food contract to burn the user's Food tokens. If user sent more than 100 tokens, burn them anyways
+```
+   ./scripts/add_minter.sh
+```
 
+7. Create an instance of the Pet contract suppying a Food contract as a token contract, using the following init script:
+
+```
+   ./scripts/create_pet.sh <pet_code_id>
+```
+If you want to alter satiation and starvatrion period, you can edit the script
+8. Edit ./scripts/_config.sh and enter pet contract's address
+9. Edit ./scripts/_config.sh and enter your wallet's address
+
+## Interacting with the dapp
+
+
+You can buy Food tokens using the following script (provided you are inside the container at code/scripts/)
+
+```
+   ./buy_food.sh 100uscrt
+```
+which will buy 100 food tokens for each uscrt
+
+You can feed the Tamagochi, only when it's hungry, and before it starves to death.
+```
+   ./feed_pet.sh
+```

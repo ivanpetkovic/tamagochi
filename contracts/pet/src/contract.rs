@@ -11,8 +11,8 @@ use crate::msg::{HandleMsg, InitMsg, Minutes, QueryMsg};
 use crate::state::{pet, pet_read, State, TokenInfo};
 
 const BLOCK_SIZE: usize = 256;
-const DEFAULT_SATIATED_TIME: Minutes = 1;
-const DEFAULT_STARVING_TIME: Minutes = 4;
+const DEFAULT_SATIATED_TIME: Minutes = 180;
+const DEFAULT_STARVING_TIME: Minutes = 60;
 const TOKENS_PER_FEEDING: u16 = 100;
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
