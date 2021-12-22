@@ -142,3 +142,8 @@ You can feed the Tamagochi, only when it's hungry, and before it starves to deat
 ```
    ./feed_pet.sh
 ```
+If you want to check you balance, create a viewing key first, and then run the script:
+```
+   ./create_viewing_key.sh
+   ./query_balance.sh
+```
