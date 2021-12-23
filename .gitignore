@@ -16,3 +16,6 @@ contract.wasm*
 *.iml
 .idea
 artifacts/*.*
+Cargo.lock
+contracts/market/Cargo.lock
+contracts/market/Cargo.lock
