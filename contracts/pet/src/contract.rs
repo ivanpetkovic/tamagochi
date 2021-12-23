@@ -1,6 +1,4 @@
 use secret_toolkit::snip20;
-use std::ops::Add;
-use std::time::Duration;
 
 use cosmwasm_std::{
     log, to_binary, Api, Binary, Env, Extern, HandleResponse, HumanAddr, InitResponse, Querier,
@@ -8,7 +6,7 @@ use cosmwasm_std::{
 };
 
 use crate::msg::{HandleMsg, InitMsg, Minutes, QueryMsg};
-use crate::state::{pet, pet_read, State, TokenInfo};
+use crate::state::{Pet, Pets, State, TokenInfo, config_read};
 
 const BLOCK_SIZE: usize = 256;
 const DEFAULT_SATIATED_TIME: Minutes = 180;
@@ -30,8 +28,6 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
             code_hash: msg.token_code_hash.clone(),
         },
     };
-
-    pet(&mut deps.storage).save(&state)?;
 
     println!("Pet was born and fed, thanks to {}", env.message.sender);
     let pet_contract_hash = &env.contract_code_hash;
@@ -60,22 +56,30 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             from,
             amount,
             ..
-        } => try_feed(&mut deps.storage, &env, sender, amount),
+        } => try_feed(deps, &env, sender, amount),
     }
 }
 
-pub fn try_feed<S: Storage>(
-    storage: &mut S,
+pub fn try_feed<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
     env: &Env,
     sender: HumanAddr,
     amount: Uint128,
 ) -> StdResult<HandleResponse> {
     let time = env.block.time;
-    let state = &pet_read(storage).load()?;
-    if is_dead(state, time) {
+    let state = config_read(&deps.storage).load()?;
+    let mut pets = Pets::from_storage(&mut deps.storage);
+    let mut pet: Pet;
+    let user_address = deps.api.canonical_address(&sender)?;
+    match pets.get(&user_address) {
+        Some(found_pet) => pet = found_pet,
+        None => pet = Pet::new(time, DEFAULT_SATIATED_TIME, DEFAULT_STARVING_TIME),
+    }
+
+    if pet.is_dead(time) {
         return Err(StdError::generic_err("Pet is dead :("));
     }
-    if !is_hungry(state, time) {
+    if !pet.is_hungry(time) {
         return Err(StdError::generic_err("Pet is not hungry"));
     }
     if amount < Uint128(TOKENS_PER_FEEDING as u128) {
@@ -83,10 +87,8 @@ pub fn try_feed<S: Storage>(
             "You need more tokens to feed the pet",
         ));
     }
-    let _ = pet(storage).update(|mut state| {
-        state.last_feed_time = time;
-        Ok(state)
-    })?;
+    pet.last_feed_time = time;
+    pets.set(&user_address, &pet);
     let burn_msg = snip20::burn_msg(
         amount,
         None,
@@ -99,19 +101,6 @@ pub fn try_feed<S: Storage>(
         log: vec![log("current_time", time), log("is_hungry", time)],
         data: None,
     })
-}
-
-fn to_seconds(interval: Minutes) -> u64 {
-    (interval * 60) as u64
-}
-
-fn is_dead(state: &State, current_time: u64) -> bool {
-    state.last_feed_time + to_seconds(state.satiated_interval) + to_seconds(state.starving_interval)
-        < current_time
-}
-
-fn is_hungry(state: &State, current_time: u64) -> bool {
-    state.last_feed_time + to_seconds(state.satiated_interval) < current_time
 }
 
 pub fn query<S: Storage, A: Api, Q: Querier>(

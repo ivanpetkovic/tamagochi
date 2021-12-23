@@ -13,6 +13,7 @@ pub struct InitMsg {
     pub token_address: String,
     pub satiated_interval: Option<u32>,
     pub starving_interval: Option<u32>,
+    pub pet_name: Option<String>
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
