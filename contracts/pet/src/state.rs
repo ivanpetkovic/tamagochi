@@ -18,10 +18,6 @@ pub struct TokenInfo {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
-    // time is seconds since epoch begin (Jan. 1, 1970)
-    pub last_feed_time: u64,
-    pub satiated_interval: Hours,
-    pub starving_interval: Hours,
     pub owner: CanonicalAddr,
     pub token_info: TokenInfo,
 }

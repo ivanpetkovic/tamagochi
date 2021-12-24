@@ -11,9 +11,6 @@ pub type Minutes = u32;
 pub struct InitMsg {
     pub token_code_hash: String,
     pub token_address: String,
-    pub satiated_interval: Option<u32>,
-    pub starving_interval: Option<u32>,
-    pub pet_name: Option<String>
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -24,13 +21,33 @@ pub enum HandleMsg {
         from: HumanAddr, 
         amount: Uint128,
         msg: Option<Binary>,
+    },
+    GetName {}, // hand to put in handle and not in query in order to find sender
+    SetName {
+        name: String,
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    IsHungry,
-    CanEat,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ResponseStatus {
+    Success,
+    Failure
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum HandleAnswer {
+    GetName {
+        name: String,
+        status: ResponseStatus
+    },
+    SetName {
+        status: ResponseStatus
+    }
+}

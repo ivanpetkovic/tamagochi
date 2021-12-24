@@ -5,8 +5,8 @@ use cosmwasm_std::{
     StdError, StdResult, Storage, Uint128,
 };
 
-use crate::msg::{HandleMsg, InitMsg, Minutes, QueryMsg};
-use crate::state::{Pet, Pets, State, TokenInfo, config_read};
+use crate::msg::{HandleMsg, InitMsg, Minutes, QueryMsg, ResponseStatus, HandleAnswer};
+use crate::state::{config_read, Pet, Pets, State, TokenInfo};
 
 const BLOCK_SIZE: usize = 256;
 const DEFAULT_SATIATED_TIME: Minutes = 180;
@@ -19,9 +19,6 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     msg: InitMsg,
 ) -> StdResult<InitResponse> {
     let state = State {
-        last_feed_time: env.block.time,
-        satiated_interval: msg.satiated_interval.unwrap_or(DEFAULT_SATIATED_TIME),
-        starving_interval: msg.starving_interval.unwrap_or(DEFAULT_STARVING_TIME),
         owner: deps.api.canonical_address(&env.message.sender)?,
         token_info: TokenInfo {
             address: HumanAddr(msg.token_address.clone()),
@@ -29,7 +26,6 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
         },
     };
 
-    println!("Pet was born and fed, thanks to {}", env.message.sender);
     let pet_contract_hash = &env.contract_code_hash;
     let callback = snip20::register_receive_msg(
         pet_contract_hash.clone(),
@@ -57,10 +53,12 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             amount,
             ..
         } => try_feed(deps, &env, sender, amount),
+        HandleMsg::SetName { name } => try_set_name(deps, &env, name),
+        HandleMsg::GetName {} => try_get_name(deps, env),
     }
 }
 
-pub fn try_feed<S: Storage, A: Api, Q: Querier>(
+fn try_feed<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: &Env,
     sender: HumanAddr,
@@ -103,27 +101,67 @@ pub fn try_feed<S: Storage, A: Api, Q: Querier>(
     })
 }
 
-pub fn query<S: Storage, A: Api, Q: Querier>(
-    deps: &Extern<S, A, Q>,
-    msg: QueryMsg,
-) -> StdResult<Binary> {
-    // match msg {
-    //     QueryMsg::CanEat {} => to_binary(&can_eat(deps)?),
-    //     QueryMsg::IsHungry {} => to_binary( &is_hungry(deps)?)
-    // }
-    Ok(to_binary("test")?)
+fn try_set_name<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: &Env,
+    name: String,
+) -> StdResult<HandleResponse> {
+    let sender = &env.message.sender;
+    let cannonical_adr = deps.api.canonical_address(&sender)?;
+    let mut pets = Pets::from_storage(&mut deps.storage);
+    let time = env.block.time;
+    let mut pet = match pets.get(&cannonical_adr) {
+        Some(pet) => pet,
+        None => Pet::new(time, DEFAULT_SATIATED_TIME, DEFAULT_STARVING_TIME),
+    };
+    pet.name = name;
+    pets.set(&cannonical_adr, &pet.clone());
+    let serialized_response = to_binary(&HandleAnswer::SetName {
+        status: ResponseStatus::Success
+    })?;
+    Ok(HandleResponse {
+        messages: vec![],
+        log: vec![],
+        data: Some(serialized_response)
+    })
 }
 
-// fn can_eat<S:Storage, A:Api, Q:Querier>(deps: &Extern<S, A, Q>) -> StdResult<bool> {
-//     Ok(true)
-// }
 
-// fn is_hungry<S:Storage, A:Api, Q:Querier>(deps: &Extern<S, A, Q>) -> StdResult<bool> {
-//     let state = pet_read(&deps.storage).load()?;
-//     // deps.
-//     // state.last_feed_time
-//     Ok(true)
-// }
+fn try_get_name<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+) -> StdResult<HandleResponse> {
+    let sender = env.message.sender;
+    let cannonical_adr = deps.api.canonical_address(&sender)?;
+    let pets = Pets::from_storage(&mut deps.storage);
+    let mut status = ResponseStatus::Success;
+    let name = match pets.get(&cannonical_adr) {
+        Some(pet) => pet.name.clone(),
+        None => {
+            status = ResponseStatus::Failure;
+            "Not found".to_string()
+        }
+    };
+    let serialized_response = to_binary(&HandleAnswer::GetName {
+        name,
+        status
+    })?;
+    Ok(HandleResponse {
+        messages: vec![],
+        log: vec![],
+        data: Some(serialized_response)
+    })
+}
+
+pub fn query<S: Storage, A: Api, Q: Querier>(
+    _deps: &Extern<S, A, Q>,
+    msg: QueryMsg,
+) -> StdResult<Binary> {
+    match msg {
+        // QueryMsg::GetFoodBalance {} => to_binary(&query_food_balance(deps)?),
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
