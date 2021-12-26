@@ -81,8 +81,6 @@ impl<'a, S: Storage> ReadonlyPets<'a, S> {
         let account_bytes = account.as_slice();
         match self.0.get(account_bytes) {
             Some(res) => {
-                
-                println!("acc={:?}, ser={:?}", account_bytes, &res);
                 let pet_result: Result<Pet, Error> = bincode2::deserialize(&res[..]);
                 Some(pet_result.unwrap())
             },
@@ -91,7 +89,6 @@ impl<'a, S: Storage> ReadonlyPets<'a, S> {
     }
 
     pub fn from_storage(storage: &'a S) -> Self {
-        // let prefixed_storage: PrefixedStorage<'a, S> = PrefixedStorage::new(PREFIX_PETS, storage);
         ReadonlyPets(storage)
     }
 }
