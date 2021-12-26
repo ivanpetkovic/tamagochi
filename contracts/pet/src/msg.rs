@@ -22,7 +22,7 @@ pub enum HandleMsg {
         amount: Uint128,
         msg: Option<Binary>,
     },
-    GetName {}, // hand to put in handle and not in query in order to find sender
+    GetName {}, // had to put inside handle and not in query in order to find sender
     SetName {
         name: String,
     }
