@@ -22,7 +22,6 @@ pub enum HandleMsg {
         amount: Uint128,
         msg: Option<Binary>,
     },
-    GetName {}, // had to put inside handle and not in query in order to find sender
     SetName {
         name: String,
     }
@@ -31,6 +30,20 @@ pub enum HandleMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
+    PetName {
+        address: HumanAddr,
+        viewing_key: String,
+    },
+
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum QueryAnswer {
+    PetName {
+        name: String,
+        status: ResponseStatus
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -43,10 +56,6 @@ pub enum ResponseStatus {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HandleAnswer {
-    GetName {
-        name: String,
-        status: ResponseStatus
-    },
     SetName {
         status: ResponseStatus
     }

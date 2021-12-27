@@ -6,8 +6,10 @@ use cosmwasm_std::{
     Querier, StdError, StdResult, Storage, Uint128,
 };
 
-use crate::msg::{HandleAnswer, HandleMsg, InitMsg, Minutes, QueryMsg, ResponseStatus};
-use crate::state::{config_read, Pet, Pets, State, TokenInfo};
+use crate::msg::{
+    HandleAnswer, HandleMsg, InitMsg, Minutes, QueryAnswer, QueryMsg, ResponseStatus,
+};
+use crate::state::{config_read, Pet, Pets, State, TokenInfo, ReadonlyPets};
 
 const BLOCK_SIZE: usize = 256;
 const DEFAULT_SATIATED_TIME: Minutes = 180;
@@ -54,32 +56,8 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             ..
         } => try_feed(deps, &env, sender, amount),
         HandleMsg::SetName { name } => try_set_name(deps, &env, name),
-        HandleMsg::GetName {} => try_get_name(deps, env),
     }
 }
-
-// fn try_feed<S: Storage, A: Api, Q: Querier>(
-//     deps: &mut Extern<S, A, Q>,
-//     env: &Env,
-//     sender: HumanAddr,
-//     amount: Uint128,
-// ) -> StdResult<HandleResponse> {
-//     let time = env.block.time;
-//     let state = config_read(&deps.storage).load()?;
-//     // let mut pets = Pets::from_storage(&mut deps.storage);
-//     let user_address = deps.api.canonical_address(&sender)?;
-//     let mut pet = Pet::new(time, DEFAULT_SATIATED_TIME, DEFAULT_STARVING_TIME, None);
-
-//     // match pets.get(&user_address) {
-//     //     Some(found_pet) => pet = found_pet,
-//     //     None => pet = Pet::new(time, DEFAULT_SATIATED_TIME, DEFAULT_STARVING_TIME),
-//     // }
-//     Ok(HandleResponse {
-//         messages: vec![],
-//         log: vec![log("pet", format!("{:?}", &pet))],
-//         data: None,
-//     })
-// }
 
 fn try_feed<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
@@ -120,7 +98,7 @@ fn try_feed<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages: vec![burn_msg],
         log: vec![log("current_time", time), log("is_hungry", time)],
-        data: None,
+        data: Some(to_binary(&HandleAnswer::SetName {status: ResponseStatus::Success})?),
     })
 }
 
@@ -150,13 +128,23 @@ fn try_set_name<S: Storage, A: Api, Q: Querier>(
     })
 }
 
-fn try_get_name<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
-    env: Env,
-) -> StdResult<HandleResponse> {
-    let sender = env.message.sender;
+pub fn query<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    msg: QueryMsg,
+) -> StdResult<Binary> {
+    match msg {
+        QueryMsg::PetName { address, viewing_key} => query_pet_name(&deps, address, viewing_key)
+    }
+}
+
+fn query_pet_name<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    sender: HumanAddr,
+    viewing_key: String
+) -> StdResult<Binary> {
     let cannonical_adr = deps.api.canonical_address(&sender)?;
-    let pets = Pets::from_storage(&mut deps.storage);
+    let pets = ReadonlyPets::from_storage(&deps.storage);
+    // TODO: auth user using the viewing_key
     let mut status = ResponseStatus::Success;
     let name = match pets.get(&cannonical_adr) {
         Some(pet) => pet.name.clone(),
@@ -166,27 +154,11 @@ fn try_get_name<S: Storage, A: Api, Q: Querier>(
         }
     };
 
-    let serialized_response = to_binary(&HandleAnswer::GetName { name: String::from(&name), status })?;
-
-    Ok(HandleResponse {
-        messages: vec![],
-        log: vec![log("name", name), log("eadi", "Radi")],
-        data: Some(serialized_response),
-    })
-    // Ok(HandleResponse {
-    //     messages: vec![],
-    //     log: vec![],
-    //     data: Some(serialized_response)
-    // })
-}
-
-pub fn query<S: Storage, A: Api, Q: Querier>(
-    _deps: &Extern<S, A, Q>,
-    msg: QueryMsg,
-) -> StdResult<Binary> {
-    match msg {
-        // QueryMsg::GetFoodBalance {} => to_binary(&query_food_balance(deps)?),
-    }
+    let serialized_response = to_binary(&QueryAnswer::PetName {
+        name: String::from(&name),
+        status,
+    })?;
+    Ok(serialized_response)
 }
 
 #[cfg(test)]
@@ -246,6 +218,7 @@ mod tests {
         pets.push(Pet::new(time, 1, 20, Some("Frey")));
         pets
     }
+    /// Converts given address string into canonical address
     fn to_canonical<A: Api>(address: &str, api: &A) -> CanonicalAddr {
         api.canonical_address(&HumanAddr(address.to_string()))
             .unwrap()
@@ -264,36 +237,30 @@ mod tests {
             let pet = pets.get(&canonical_address).unwrap();
             assert_eq!(pet.color, mocked_pet.color);
         })
-        // assert_eq!(FOOD_ADDRESS, deps.storage.)
-        // it worked, let's query the state
-        // let res = query(&deps, QueryMsg::GetCount {}).unwrap();
-        // let value: CountResponse = from_binary(&res).unwrap();
-        // assert_eq!(17, value.count);
     }
+
     #[test]
-    fn test_get_name() {
+    fn test_query_pet_name() {
         let mocked_pets = create_pets();
-        let (_init_result, mut deps) = init_helper(&mocked_pets);
-        let env = mock_env(SENDERS[0], &coins(1000, "FOOD"));
-        let msg = HandleMsg::GetName {};
-        let res = handle(&mut deps, env, msg).unwrap();
+        let (_init_result, deps) = init_helper(&mocked_pets);
+        let msg = QueryMsg::PetName {
+             address: HumanAddr(SENDERS[0].to_string()),
+             viewing_key: "key".to_string()
+        };
+        let res = query(&deps, msg).unwrap();
         let pets = ReadonlyPets::from_storage(&deps.storage);
         // sender who didn't create a pet should not be able to get its name
         let canonical_address = to_canonical("some sender", &deps.api);
         let pet_res = pets.get(&canonical_address);
         assert_eq!(pet_res.is_none(), true);
 
-        assert_eq!(res.data.is_some(), true);
-        let data_res: StdResult<HandleAnswer> = from_binary(&res.data.unwrap());
+        let data_res: StdResult<QueryAnswer> = from_binary(&res);
         let data = data_res.unwrap();
         match data {
-            HandleAnswer::GetName{ name, status} => {
-                assert_eq!(name, "ddd");
+            QueryAnswer::PetName { name, status } => {
+                assert_eq!(name, mocked_pets[0].name);
                 assert_eq!(status, ResponseStatus::Success);
-            },
-            HandleAnswer::SetName {status} => {
-                panic!("Incorrect handle answer")
-            },
+            }
         }
     }
 
@@ -301,18 +268,33 @@ mod tests {
     fn test_set_name() {
         let mocked_pets = create_pets();
         let (_init_result, mut deps) = init_helper(&mocked_pets);
+        let creator = SENDERS[0];
+        let new_name = "Stan";
+        let viewing_key = "proper-viewing-key".to_string();
         let env = mock_env(SENDERS[0], &coins(1000, "FOOD"));
         let msg = HandleMsg::SetName {
-            name: "Stan".to_string(),
+            name: new_name.to_string(),
         };
-        // check if there is other way then cloning env
-        let res = handle(&mut deps, env, msg).unwrap();
-        let pets = ReadonlyPets::from_storage(&deps.storage);
-
-        let canonical_address = to_canonical(SENDERS[0], &deps.api);
-        let pet_res = pets.get(&canonical_address);
-        let pet = pet_res.unwrap();
-        assert_eq!(pet.name, "Stan");
+        let serialized_answer = handle(&mut deps, env, msg)
+            .unwrap()
+            .data
+            .unwrap();
+        match from_binary(&serialized_answer).unwrap() {
+            HandleAnswer::SetName {status} => {
+                assert_eq!(status, ResponseStatus::Success);
+            }
+        }
+        // for some reason, query returs old pet name
+        let query_res = query(&deps, QueryMsg::PetName{
+            address: HumanAddr(creator.to_string()),
+            viewing_key
+        }).unwrap();
+        match from_binary(&query_res).unwrap() {
+             QueryAnswer::PetName { name, status} =>{
+                 assert_eq!(name, new_name);
+                 assert_eq!(status, ResponseStatus::Success);
+             }
+        }
     }
 
     // #[test]
