@@ -1,3 +1,5 @@
+use std::fmt;
+
 use bincode2::Error;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -70,6 +72,12 @@ pub fn config_read<S: Storage>(storage: &S) -> ReadonlySingleton<S, State> {
 pub struct Pets<'a, S: Storage> {
     storage: PrefixedStorage<'a, S>,
 }
+
+// impl fmt::Display for Pets {
+//     fn fmt(self: &Pets, f: &mut fmt::Formatter<'_> ) -> fmt::Result {
+//         self.storage.
+//     }
+// }
 
 /// This was the only way to prevent code duplication of these methods because of the way
 /// that `ReadonlyPrefixedStorage` and `PrefixedStorage` are implemented in `cosmwasm-std`
