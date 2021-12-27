@@ -111,11 +111,11 @@ fn try_set_name<S: Storage, A: Api, Q: Querier>(
     let cannonical_adr = deps.api.canonical_address(&sender)?;
     let mut pets = Pets::from_storage(&mut deps.storage);
     let time = env.block.time;
-    // let mut pet = match pets.get(&cannonical_adr) {
-    //     Some(pet) => pet,
-    //     None => Pet::new(time, DEFAULT_SATIATED_TIME, DEFAULT_STARVING_TIME),
-    // };
-    let mut pet = Pet::new(time, DEFAULT_SATIATED_TIME, DEFAULT_STARVING_TIME, None);
+    let mut pet = match pets.get(&cannonical_adr) {
+        Some(pet) => pet,
+        None => Pet::new(time, DEFAULT_SATIATED_TIME, DEFAULT_STARVING_TIME, None),
+    };
+    //let mut pet = Pet::new(time, DEFAULT_SATIATED_TIME, DEFAULT_STARVING_TIME, None);
     pet.name = name;
     pets.set(&cannonical_adr, &pet.clone());
     let serialized_response = to_binary(&HandleAnswer::SetName {
