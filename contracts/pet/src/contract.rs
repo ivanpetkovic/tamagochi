@@ -109,11 +109,13 @@ fn try_set_name<S: Storage, A: Api, Q: Querier>(
 ) -> StdResult<HandleResponse> {
     let sender = &env.message.sender;
     let cannonical_adr = deps.api.canonical_address(&sender)?;
+    
+    println!("cann={}", &sender.to_string());
     let mut pets = Pets::from_storage(&mut deps.storage);
     let time = env.block.time;
     let mut pet = match pets.get(&cannonical_adr) {
         Some(pet) => pet,
-        None => Pet::new(time, DEFAULT_SATIATED_TIME, DEFAULT_STARVING_TIME, None),
+        None => return Err(StdError::not_found("Pet not found"))
     };
     //let mut pet = Pet::new(time, DEFAULT_SATIATED_TIME, DEFAULT_STARVING_TIME, None);
     pet.name = name;
