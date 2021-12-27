@@ -1,4 +1,4 @@
-use cosmwasm_std::testing::{mock_dependencies, MockApi, MockQuerier, MockStorage};
+
 use secret_toolkit::snip20;
 
 use cosmwasm_std::{
@@ -168,7 +168,7 @@ mod tests {
     use crate::state::ReadonlyPets;
 
     use super::*;
-    use cosmwasm_std::testing::{mock_dependencies, mock_env};
+    use cosmwasm_std::testing::{mock_dependencies, mock_env, MockApi, MockQuerier, MockStorage};
     use cosmwasm_std::{coins, CanonicalAddr};
 
     const FOOD_ADDRESS: &str = "secret18vd8fpwxzck93qlwghaj6arh4p7c5n8978vsyg";
