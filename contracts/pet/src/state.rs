@@ -4,10 +4,10 @@ use bincode2::Error;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{CanonicalAddr, HumanAddr, ReadonlyStorage, StdError, StdResult, Storage};
+use cosmwasm_std::{CanonicalAddr, HumanAddr, Storage};
 use cosmwasm_storage::{singleton, singleton_read, PrefixedStorage, ReadonlySingleton, Singleton};
 
-use crate::msg::{Hours, Minutes};
+use crate::pet::Pet;
 
 pub static PET_KEY: &[u8] = b"pet";
 pub static CONFIG_KEY: &[u8] = b"config";
@@ -25,41 +25,6 @@ pub struct State {
     pub token_info: TokenInfo,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Pet {
-    pub name: String,
-    pub color: String,
-    pub last_feed_time: u64,
-    pub satiated_interval: Minutes,
-    pub starving_interval: Minutes,
-}
-
-impl Pet {
-    pub fn new(last_fed: u64, satiated: Minutes, starving: Minutes, name: Option<&str>) -> Self {
-        Pet {
-            name: name.unwrap_or("Johny Doe").to_string(),
-            color: "white".to_string(),
-            last_feed_time: last_fed,
-            satiated_interval: satiated,
-            starving_interval: starving,
-        }
-    }
-
-    pub fn is_dead(self: &Self, current_time: u64) -> bool {
-        self.last_feed_time
-            + to_seconds(self.satiated_interval)
-            + to_seconds(self.starving_interval)
-            < current_time
-    }
-
-    pub fn is_hungry(self: &Self, current_time: u64) -> bool {
-        self.last_feed_time + to_seconds(self.satiated_interval) < current_time
-    }
-}
-
-fn to_seconds(interval: Minutes) -> u64 {
-    (interval * 60) as u64
-}
 
 pub fn config<S: Storage>(storage: &mut S) -> Singleton<S, State> {
     singleton(storage, PET_KEY)
@@ -92,7 +57,10 @@ impl<'a, S: Storage> ReadonlyPets<'a, S> {
                 let pet_result: Result<Pet, Error> = bincode2::deserialize(&res[..]);
                 Some(pet_result.unwrap())
             },
-            None => return None,
+            None => {
+                println!("/n Not found pet for {}", &account);
+                return None;
+            }
         }
     }
 

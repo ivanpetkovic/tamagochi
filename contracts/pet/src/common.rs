@@ -1,3 +1,3 @@
 
-    // pub struct Hours(u8);
-    // pub struct Minutes(u8);
+pub type Hours = u32;
+pub type Minutes = u32;

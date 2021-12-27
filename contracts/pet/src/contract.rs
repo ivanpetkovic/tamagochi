@@ -5,10 +5,10 @@ use cosmwasm_std::{
     Querier, StdError, StdResult, Storage, Uint128,
 };
 
-use crate::msg::{
-    HandleAnswer, HandleMsg, InitMsg, Minutes, QueryAnswer, QueryMsg, ResponseStatus,
-};
-use crate::state::{config_read, Pet, Pets, ReadonlyPets, State, TokenInfo};
+use crate::common::Minutes;
+use crate::msg::{HandleAnswer, HandleMsg, InitMsg, QueryAnswer, QueryMsg, ResponseStatus};
+use crate::pet::{self, Pet};
+use crate::state::{config_read, Pets, ReadonlyPets, State, TokenInfo};
 
 const BLOCK_SIZE: usize = 256;
 const DEFAULT_SATIATED_TIME: Minutes = 180;
@@ -68,7 +68,7 @@ fn try_feed<S: Storage, A: Api, Q: Querier>(
     let state = config_read(&deps.storage).load()?;
     let mut pets = Pets::from_storage(&mut deps.storage);
     let user_address = deps.api.canonical_address(&sender)?;
-    let mut pet = Pet::new(time, DEFAULT_SATIATED_TIME, DEFAULT_STARVING_TIME, None);
+    let mut pet = pet::Pet::new(time, DEFAULT_SATIATED_TIME, DEFAULT_STARVING_TIME, None);
 
     match pets.get(&user_address) {
         Some(found_pet) => pet = found_pet,
@@ -111,19 +111,37 @@ fn try_set_name<S: Storage, A: Api, Q: Querier>(
     let sender = &env.message.sender;
     let canonical_adr = deps.api.canonical_address(&sender)?;
 
+    // seems that ReadonlyPet and Pet are separate instances
+
     println!("cann={}", &canonical_adr.to_string());
+    // {
+    //     //for test
+    //     let readonly_pets = ReadonlyPets::from_storage(&deps.storage);
+    //     let pet = match readonly_pets.get(&canonical_adr) {
+    //         Some(pet) => pet,
+    //         None => return Err(StdError::not_found("Pet not found")),
+    //     };
+    //     println!("rpet {:?}", &pet);
+    // }
     let mut pets = Pets::from_storage(&mut deps.storage);
-    let mut pet = match pets.get(&canonical_adr) {
-        Some(pet) => pet,
-        None => return Err(StdError::not_found("Pet not found")),
-    };
-    //let mut pet = Pet::new(time, DEFAULT_SATIATED_TIME, DEFAULT_STARVING_TIME, None);
+    let mut pet = Pet::new(env.block.time, 30, 10, Some("Ringo"));
+    // let mut pet = match pets.get(&canonical_adr) {
+    //     Some(pet) => pet,
+    //     None => return Err(StdError::not_found("Pet not found")),
+    // };
     pet.name = name;
     // is there a better way to update state? This way more bytes are transfered, depleting more gas
     pets.set(&canonical_adr, &pet.clone());
     let serialized_response = to_binary(&HandleAnswer::SetName {
         status: ResponseStatus::Success,
     })?;
+
+    let pet2 = match pets.get(&canonical_adr) {
+        Some(pet) => pet,
+        None => return Err(StdError::not_found("Pet not found")),
+    };
+    println!("rpet {:?}", &pet2);
+
     Ok(HandleResponse {
         messages: vec![],
         log: vec![],
@@ -136,14 +154,14 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
     msg: QueryMsg,
 ) -> StdResult<Binary> {
     match msg {
-        QueryMsg::PetName {
+        QueryMsg::Pet {
             address,
             viewing_key,
-        } => query_pet_name(&deps, address, viewing_key),
+        } => query_pet(&deps, address, viewing_key),
     }
 }
 
-fn query_pet_name<S: Storage, A: Api, Q: Querier>(
+fn query_pet<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
     sender: HumanAddr,
     viewing_key: String,
@@ -160,8 +178,8 @@ fn query_pet_name<S: Storage, A: Api, Q: Querier>(
         }
     };
 
-    let serialized_response = to_binary(&QueryAnswer::PetName {
-        name: String::from(&name),
+    let serialized_response = to_binary(&QueryAnswer::Pet {
+        pet: String::from(&name),
         status,
     })?;
     Ok(serialized_response)
@@ -258,31 +276,32 @@ mod tests {
         let pets = ReadonlyPets::from_storage(&deps.storage);
 
         {
-            let msg = QueryMsg::PetName {
+            let msg = QueryMsg::Pet {
                 address: HumanAddr(SENDERS[0].to_string()),
                 viewing_key: "key".to_string(),
             };
             let answer_res: StdResult<QueryAnswer> = from_binary(&query(&deps, msg).unwrap());
             let answer = answer_res.unwrap();
             match answer {
-                QueryAnswer::PetName { name, status } => {
-                    assert_eq!(name, mocked_pets[0].name);
+                QueryAnswer::Pet { pet, status } => {
+                    assert_eq!(pet, mocked_pets[0].name);
                     assert_eq!(status, ResponseStatus::Success);
                 }
             }
         }
 
-        {// sender who didn't create a pet should not be able to get its name
-            let msg = QueryMsg::PetName {
+        {
+            // sender who didn't create a pet should not be able to get its name
+            let msg = QueryMsg::Pet {
                 address: HumanAddr("unknown sender".to_string()),
                 viewing_key: "key2".to_string(),
             };
             let answer_res: StdResult<QueryAnswer> = from_binary(&query(&deps, msg).unwrap());
             let answer = answer_res.unwrap();
             match answer {
-                QueryAnswer::PetName { name, status } => {
+                QueryAnswer::Pet { pet, status } => {
                     assert_eq!(status, ResponseStatus::Failure);
-                    assert_eq!(name, "Not found");
+                    assert_eq!(pet, "Not found");
                 }
             }
         }
@@ -300,7 +319,7 @@ mod tests {
         let creator = SENDERS[0];
         let new_name = "Stan";
         let viewing_key = "proper-viewing-key".to_string();
-        let env = mock_env(SENDERS[0], &coins(1000, "FOOD"));
+        let env = mock_env(creator, &coins(1000, "FOOD"));
         let msg = HandleMsg::SetName {
             name: new_name.to_string(),
         };
@@ -313,15 +332,15 @@ mod tests {
         // for some reason, query returs old pet name
         let query_res = query(
             &deps,
-            QueryMsg::PetName {
+            QueryMsg::Pet {
                 address: HumanAddr(creator.to_string()),
                 viewing_key,
             },
         )
         .unwrap();
         match from_binary(&query_res).unwrap() {
-            QueryAnswer::PetName { name, status } => {
-                assert_eq!(name, new_name);
+            QueryAnswer::Pet { pet, status } => {
+                assert_eq!(pet, new_name);
                 assert_eq!(status, ResponseStatus::Success);
             }
         }

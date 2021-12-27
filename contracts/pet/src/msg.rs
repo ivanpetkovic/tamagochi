@@ -2,9 +2,7 @@ use cosmwasm_std::{HumanAddr, Uint128, Binary};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-
-pub type Hours = u32;
-pub type Minutes = u32;
+use crate::pet::Pet;
 
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -30,7 +28,7 @@ pub enum HandleMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    PetName {
+    Pet {
         address: HumanAddr,
         viewing_key: String,
     },
@@ -40,8 +38,8 @@ pub enum QueryMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryAnswer {
-    PetName {
-        name: String,
+    Pet {
+        pet: String, // currently only Pet name, but will refactor to return Pet
         status: ResponseStatus
     }
 }
