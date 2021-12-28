@@ -1,7 +1,7 @@
-USER_ADDRES="secret1fg7ee7949xzcdw09px4jx5hy66mtt4f3cktlej"
+USER_ADDRES="secret120kefl0qqa67stx5wg9yznw4ltc382aqnm3s0n"
 FOOD_ADDRESS="secret18vd8fpwxzck93qlwghaj6arh4p7c5n8978vsyg"
 FOOD_CODE_HASH="E6687CD1C4E4ED16712CD7BD4CED08D7E01E7A95E6EA459773BF0C1851F2BA7F"
 MARKET_ADDRESS="secret10pyejy66429refv3g35g2t7am0was7ya6hvrzf"
-PET_ADDRESS="secret1sh36qn08g4cqg685cfzmyxqv2952q6r8vqktuh"
+PET_ADDRESS="secret1tndcaqxkpc5ce9qee5ggqf430mr2z3pedc68dx"
 
-VIEWING_KEY="api_key_WTkzygKOP5JqrlsXYVwySjq25GynoplDMVDicxzbw3w="
+VIEWING_KEY="api_key_GQHtRPL/4P4THRfaMBtVL/EfusAlzL3ynXulGZOP70g="

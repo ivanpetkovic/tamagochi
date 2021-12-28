@@ -20,6 +20,9 @@ pub enum HandleMsg {
         amount: Uint128,
         msg: Option<Binary>,
     },
+    Create {
+        name: String
+    },
     SetName {
         name: String,
     }

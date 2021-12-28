@@ -1,3 +1,3 @@
 source "./_config.sh"
 echo $PET_ADDRESS
-secretd tx compute execute $PET_ADDRESS '{"pet":{}}' --from a --gas 20000000
+secretd query compute query $PET_ADDRESS '{"pet": {"address":"'$USER_ADDRES'", "viewing_key": "'$VIEWING_KEY'"}}' 

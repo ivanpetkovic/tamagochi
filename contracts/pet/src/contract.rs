@@ -57,7 +57,22 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             ..
         } => try_feed(deps, &env, sender, amount),
         HandleMsg::SetName { name } => try_set_name(deps, &env, name),
+        HandleMsg::Create { name} => try_create_pet(deps, &env, name)
     }
+}
+
+
+fn try_create_pet<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: &Env,
+    name: String
+) -> StdResult<HandleResponse> {
+    let time = env.block.time;
+    let mut pets = Pets::from_storage(&mut deps.storage);
+    let user_address = deps.api.canonical_address(&env.message.sender)?;
+    let pet = Pet::new(time, DEFAULT_SATIATED_TIME, DEFAULT_STARVING_TIME, Some(&name));
+    pets.set(&user_address, &pet);
+    Ok(HandleResponse::default())
 }
 
 fn try_feed<S: Storage, A: Api, Q: Querier>(
