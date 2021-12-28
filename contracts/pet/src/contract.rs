@@ -8,7 +8,7 @@ use cosmwasm_std::{
 use crate::common::Minutes;
 use crate::msg::{HandleAnswer, HandleMsg, InitMsg, QueryAnswer, QueryMsg, ResponseStatus};
 use crate::pet::{self, Pet};
-use crate::state::{config_read, Pets, ReadonlyPets, State, TokenInfo};
+use crate::state::{config_read, Pets, ReadonlyPets, State, TokenInfo, config};
 
 const BLOCK_SIZE: usize = 256;
 const DEFAULT_SATIATED_TIME: Minutes = 180;
@@ -20,13 +20,15 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     env: Env,
     msg: InitMsg,
 ) -> StdResult<InitResponse> {
-    let _state = State {
+    let config_state = State {
         owner: deps.api.canonical_address(&env.message.sender)?,
         token_info: TokenInfo {
             address: HumanAddr(msg.token_address.clone()),
             code_hash: msg.token_code_hash.clone(),
         },
     };
+
+    config(&mut deps.storage).save(&config_state)?;
 
     let pet_contract_hash = &env.contract_code_hash;
     let callback = snip20::register_receive_msg(
@@ -68,7 +70,7 @@ fn try_feed<S: Storage, A: Api, Q: Querier>(
     let state = config_read(&deps.storage).load()?;
     let mut pets = Pets::from_storage(&mut deps.storage);
     let user_address = deps.api.canonical_address(&sender)?;
-    let mut pet = pet::Pet::new(time, DEFAULT_SATIATED_TIME, DEFAULT_STARVING_TIME, None);
+    let mut pet ;
 
     match pets.get(&user_address) {
         Some(found_pet) => pet = found_pet,
