@@ -147,19 +147,16 @@ fn query_pet<S: Storage, A: Api, Q: Querier>(
     let cannonical_adr = deps.api.canonical_address(&sender)?;
     let pets = ReadonlyPets::from_storage(&deps.storage);
     // TODO: auth user using the viewing_key
-    let mut status = ResponseStatus::Success;
-    let name = match pets.get(&cannonical_adr) {
-        Some(pet) => pet.name.clone(),
-        None => {
-            status = ResponseStatus::Failure;
-            "Not found".to_string()
-        }
+    let pet = if let Some(pet) = pets.get(&cannonical_adr) {
+        pet
+    } else {
+        return Err(StdError::not_found(format!(
+            "Pet not found for {}",
+            &sender
+        )));
     };
 
-    let serialized_response = to_binary(&QueryAnswer::Pet {
-        pet: String::from(&name),
-        status,
-    })?;
+    let serialized_response = to_binary(&QueryAnswer::Pet { pet })?;
     Ok(serialized_response)
 }
 
@@ -238,16 +235,26 @@ mod tests {
         let mocked_pets = create_pets();
         let (init_result, mut deps) = init_helper(&mocked_pets);
 
-        // we can just call .unwrap() to assert this was a success
         let response = init_result.unwrap();
         assert_eq!(1, response.messages.len());
-        //let pets = ReadonlyPets::from_storage(&deps.storage);
-        let pets = Pets::from_storage(&mut deps.storage);
-        mocked_pets.iter().enumerate().for_each(|(i, mocked_pet)| {
-            let canonical_address = to_canonical(SENDERS[i], &deps.api);
-            let pet = pets.get(&canonical_address).unwrap();
-            assert_eq!(pet.color, mocked_pet.color);
-        })
+
+        {
+            let pets = Pets::from_storage(&mut deps.storage);
+            mocked_pets.iter().enumerate().for_each(|(i, mocked_pet)| {
+                let canonical_address = to_canonical(SENDERS[i], &deps.api);
+                let pet = pets.get(&canonical_address).unwrap();
+                assert_eq!(pet.color, mocked_pet.color);
+            })
+        }
+
+        { // ReadonlyPets and Pets should access the same storage
+            let pets = ReadonlyPets::from_storage(&deps.storage);
+            mocked_pets.iter().enumerate().for_each(|(i, mocked_pet)| {
+                let canonical_address = to_canonical(SENDERS[i], &deps.api);
+                let pet = pets.get(&canonical_address).unwrap();
+                assert_eq!(pet.color, mocked_pet.color);
+            })
+        }
     }
 
     #[test]
@@ -264,9 +271,8 @@ mod tests {
             let answer_res: StdResult<QueryAnswer> = from_binary(&query(&deps, msg).unwrap());
             let answer = answer_res.unwrap();
             match answer {
-                QueryAnswer::Pet { pet, status } => {
-                    assert_eq!(pet, mocked_pets[0].name);
-                    assert_eq!(status, ResponseStatus::Success);
+                QueryAnswer::Pet { pet } => {
+                    assert_eq!(pet.name, mocked_pets[0].name);
                 }
             }
         }
@@ -277,14 +283,8 @@ mod tests {
                 address: HumanAddr("unknown sender".to_string()),
                 viewing_key: "key2".to_string(),
             };
-            let answer_res: StdResult<QueryAnswer> = from_binary(&query(&deps, msg).unwrap());
-            let answer = answer_res.unwrap();
-            match answer {
-                QueryAnswer::Pet { pet, status } => {
-                    assert_eq!(status, ResponseStatus::Failure);
-                    assert_eq!(pet, "Not found");
-                }
-            }
+            let query_res = query(&deps, msg);
+            assert_eq!(query_res.is_err(), true);
         }
 
         // sender who didn't create a pet should not be able to get its name (direct storage access version)
@@ -320,9 +320,8 @@ mod tests {
         )
         .unwrap();
         match from_binary(&query_res).unwrap() {
-            QueryAnswer::Pet { pet, status } => {
-                assert_eq!(pet, new_name);
-                assert_eq!(status, ResponseStatus::Success);
+            QueryAnswer::Pet { pet } => {
+                assert_eq!(pet.name, new_name);
             }
         }
     }

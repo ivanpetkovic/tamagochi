@@ -1,10 +1,11 @@
+use schemars::JsonSchema;
 use serde::{Serialize, Deserialize};
 
 use crate::common::Minutes;
 
 
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Pet {
     pub name: String,
     pub color: String,

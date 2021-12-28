@@ -39,8 +39,7 @@ pub enum QueryMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryAnswer {
     Pet {
-        pet: String, // currently only Pet name, but will refactor to return Pet
-        status: ResponseStatus
+        pet: Pet, // currently only Pet name, but will refactor to return Pet
     }
 }
 

@@ -4,8 +4,11 @@ use bincode2::Error;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{CanonicalAddr, HumanAddr, Storage, ReadonlyStorage};
-use cosmwasm_storage::{singleton, singleton_read, PrefixedStorage, ReadonlySingleton, Singleton, ReadonlyPrefixedStorage};
+use cosmwasm_std::{CanonicalAddr, HumanAddr, ReadonlyStorage, Storage};
+use cosmwasm_storage::{
+    singleton, singleton_read, PrefixedStorage, ReadonlyPrefixedStorage, ReadonlySingleton,
+    Singleton,
+};
 
 use crate::pet::Pet;
 
@@ -25,7 +28,6 @@ pub struct State {
     pub token_info: TokenInfo,
 }
 
-
 pub fn config<S: Storage>(storage: &mut S) -> Singleton<S, State> {
     singleton(storage, PET_KEY)
 }
@@ -38,13 +40,6 @@ pub struct Pets<'a, S: Storage> {
     storage: PrefixedStorage<'a, S>,
 }
 
-// impl fmt::Display for Pets {
-//     fn fmt(self: &Pets, f: &mut fmt::Formatter<'_> ) -> fmt::Result {
-//         self.storage.
-//     }
-// }
-
-
 impl<'a, S: Storage> Pets<'a, S> {
     pub fn from_storage(storage: &'a mut S) -> Self {
         Self {
@@ -52,7 +47,7 @@ impl<'a, S: Storage> Pets<'a, S> {
         }
     }
 
-    /// Workaround, as if we use ReadonlyPets::from_storage(&self.storage) it seems to use 
+    /// Workaround, as if we use ReadonlyPets::from_storage(&self.storage) it seems to use
     /// another instance of the storage
     fn as_readonly(&self) -> ReadonlyPetsImpl<PrefixedStorage<S>> {
         ReadonlyPetsImpl(&self.storage)
@@ -72,23 +67,19 @@ impl<'a, S: Storage> Pets<'a, S> {
     }
 }
 
-
-pub struct ReadonlyPets<'a, S: ReadonlyStorage>{
+pub struct ReadonlyPets<'a, S: ReadonlyStorage> {
     storage: ReadonlyPrefixedStorage<'a, S>,
 }
 
 impl<'a, S: Storage> ReadonlyPets<'a, S> {
     pub fn get(&self, account: &CanonicalAddr) -> Option<Pet> {
         let account_bytes = account.as_slice();
-        match self.storage.get(account_bytes) {
-            Some(res) => {
-                let pet_result: Result<Pet, Error> = bincode2::deserialize(&res[..]);
-                Some(pet_result.unwrap())
-            },
-            None => {
-                println!("/n Not found pet for {}", &account);
-                return None;
-            }
+        if let Some(res) = self.storage.get(account_bytes) {
+            let pet_result: Result<Pet, Error> = bincode2::deserialize::<Pet>(&res);
+            Some(pet_result.unwrap())
+        } else {
+            println!("/n Not found pet for {}", &account);
+            return None;
         }
     }
 
@@ -102,13 +93,13 @@ impl<'a, S: Storage> ReadonlyPets<'a, S> {
 struct ReadonlyPetsImpl<'a, S: ReadonlyStorage>(&'a S);
 
 impl<'a, S: ReadonlyStorage> ReadonlyPetsImpl<'a, S> {
-    pub fn get(&self, account: &CanonicalAddr) -> Option<Pet>{
+    pub fn get(&self, account: &CanonicalAddr) -> Option<Pet> {
         let account_bytes = account.as_slice();
         match self.0.get(account_bytes) {
             Some(res) => {
                 let pet_result: Result<Pet, Error> = bincode2::deserialize(&res[..]);
                 Some(pet_result.unwrap())
-            },
+            }
             None => {
                 println!("/n Not found pet for {}", &account);
                 return None;
