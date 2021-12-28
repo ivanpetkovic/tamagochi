@@ -4,8 +4,8 @@ use bincode2::Error;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{CanonicalAddr, HumanAddr, Storage};
-use cosmwasm_storage::{singleton, singleton_read, PrefixedStorage, ReadonlySingleton, Singleton};
+use cosmwasm_std::{CanonicalAddr, HumanAddr, Storage, ReadonlyStorage};
+use cosmwasm_storage::{singleton, singleton_read, PrefixedStorage, ReadonlySingleton, Singleton, ReadonlyPrefixedStorage};
 
 use crate::pet::Pet;
 
@@ -44,15 +44,43 @@ pub struct Pets<'a, S: Storage> {
 //     }
 // }
 
-/// This was the only way to prevent code duplication of these methods because of the way
-/// that `ReadonlyPrefixedStorage` and `PrefixedStorage` are implemented in `cosmwasm-std`
-#[derive(Debug)]
-pub struct ReadonlyPets<'a, S: Storage>(&'a S);
+
+impl<'a, S: Storage> Pets<'a, S> {
+    pub fn from_storage(storage: &'a mut S) -> Self {
+        Self {
+            storage: PrefixedStorage::new(PREFIX_PETS, storage),
+        }
+    }
+
+    /// Workaround, as if we use ReadonlyPets::from_storage(&self.storage) it seems to use 
+    /// another instance of the storage
+    fn as_readonly(&self) -> ReadonlyPetsImpl<PrefixedStorage<S>> {
+        ReadonlyPetsImpl(&self.storage)
+    }
+
+    // fn as_readonly2(&self) -> ReadonlyPets<PrefixedStorage<S>> {
+    //     ReadonlyPets::from_storage(&self.storage)
+    // }
+
+    pub fn get(&self, account: &CanonicalAddr) -> Option<Pet> {
+        self.as_readonly().get(account)
+    }
+
+    pub fn set(&mut self, account: &CanonicalAddr, pet: &Pet) {
+        let serialized = bincode2::serialize(pet).unwrap();
+        self.storage.set(account.as_slice(), &serialized)
+    }
+}
+
+
+pub struct ReadonlyPets<'a, S: ReadonlyStorage>{
+    storage: ReadonlyPrefixedStorage<'a, S>,
+}
 
 impl<'a, S: Storage> ReadonlyPets<'a, S> {
     pub fn get(&self, account: &CanonicalAddr) -> Option<Pet> {
         let account_bytes = account.as_slice();
-        match self.0.get(account_bytes) {
+        match self.storage.get(account_bytes) {
             Some(res) => {
                 let pet_result: Result<Pet, Error> = bincode2::deserialize(&res[..]);
                 Some(pet_result.unwrap())
@@ -65,33 +93,26 @@ impl<'a, S: Storage> ReadonlyPets<'a, S> {
     }
 
     pub fn from_storage(storage: &'a S) -> Self {
-        ReadonlyPets(storage)
+        Self {
+            storage: ReadonlyPrefixedStorage::new(PREFIX_PETS, &storage),
+        }
     }
 }
 
-impl<'a, S: Storage> Pets<'a, S> {
-    pub fn from_storage(storage: &'a mut S) -> Self {
-        Self {
-            storage: PrefixedStorage::new(PREFIX_PETS, storage),
+struct ReadonlyPetsImpl<'a, S: ReadonlyStorage>(&'a S);
+
+impl<'a, S: ReadonlyStorage> ReadonlyPetsImpl<'a, S> {
+    pub fn get(&self, account: &CanonicalAddr) -> Option<Pet>{
+        let account_bytes = account.as_slice();
+        match self.0.get(account_bytes) {
+            Some(res) => {
+                let pet_result: Result<Pet, Error> = bincode2::deserialize(&res[..]);
+                Some(pet_result.unwrap())
+            },
+            None => {
+                println!("/n Not found pet for {}", &account);
+                return None;
+            }
         }
-    }
-
-    // pub fn from_storage_as_readonly(storage: &'a S) -> Self {
-    //     Self {
-    //         storage: ReadonlyStorage::new(PREFIX_PETS, storage),
-    //     }
-    // }
-
-    fn as_readonly(&self) -> ReadonlyPets<PrefixedStorage<S>> {
-        ReadonlyPets(&self.storage)
-    }
-
-    pub fn get(&self, account: &CanonicalAddr) -> Option<Pet> {
-        self.as_readonly().get(account)
-    }
-
-    pub fn set(&mut self, account: &CanonicalAddr, pet: &Pet) {
-        let serialized = bincode2::serialize(pet).unwrap();
-        self.storage.set(account.as_slice(), &serialized)
     }
 }

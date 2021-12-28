@@ -109,39 +109,17 @@ fn try_set_name<S: Storage, A: Api, Q: Querier>(
     name: String,
 ) -> StdResult<HandleResponse> {
     let sender = &env.message.sender;
-    let canonical_adr = deps.api.canonical_address(&sender)?;
-
-    // seems that ReadonlyPet and Pet are separate instances
-
-    println!("cann={}", &canonical_adr.to_string());
-    // {
-    //     //for test
-    //     let readonly_pets = ReadonlyPets::from_storage(&deps.storage);
-    //     let pet = match readonly_pets.get(&canonical_adr) {
-    //         Some(pet) => pet,
-    //         None => return Err(StdError::not_found("Pet not found")),
-    //     };
-    //     println!("rpet {:?}", &pet);
-    // }
+    let canonical_adr = deps.api.canonical_address(sender)?;
     let mut pets = Pets::from_storage(&mut deps.storage);
-    let mut pet = Pet::new(env.block.time, 30, 10, Some("Ringo"));
-    // let mut pet = match pets.get(&canonical_adr) {
-    //     Some(pet) => pet,
-    //     None => return Err(StdError::not_found("Pet not found")),
-    // };
+    let mut pet = match pets.get(&canonical_adr) {
+        Some(pet) => pet,
+        None => return Err(StdError::not_found("Pet not found")),
+    };
     pet.name = name;
-    // is there a better way to update state? This way more bytes are transfered, depleting more gas
     pets.set(&canonical_adr, &pet.clone());
     let serialized_response = to_binary(&HandleAnswer::SetName {
         status: ResponseStatus::Success,
     })?;
-
-    let pet2 = match pets.get(&canonical_adr) {
-        Some(pet) => pet,
-        None => return Err(StdError::not_found("Pet not found")),
-    };
-    println!("rpet {:?}", &pet2);
-
     Ok(HandleResponse {
         messages: vec![],
         log: vec![],
@@ -212,6 +190,7 @@ mod tests {
             token_address: FOOD_ADDRESS.to_string(),
             token_code_hash: FOOD_CODE_HASH.to_string(),
         };
+        let mut pets = Pets::from_storage(&mut deps.storage);
         // should I bother adding 20 bytes long address? snip20 implementation doesn't
         initial_pets.iter().enumerate().for_each(|(i, pet)| {
             let cannonical_address = deps
@@ -226,7 +205,8 @@ mod tests {
                 &serialized,
                 &pet
             );
-            deps.storage.set(cannonical_address.as_slice(), &serialized);
+            // deps.storage.set(cannonical_address.as_slice(), &serialized);
+            pets.set(&cannonical_address, &pet);
         });
         let env = mock_env("creator", &coins(1000, "FOOD"));
 
@@ -256,12 +236,13 @@ mod tests {
     #[test]
     fn proper_initialization() {
         let mocked_pets = create_pets();
-        let (init_result, deps) = init_helper(&mocked_pets);
+        let (init_result, mut deps) = init_helper(&mocked_pets);
 
         // we can just call .unwrap() to assert this was a success
         let response = init_result.unwrap();
         assert_eq!(1, response.messages.len());
-        let pets = ReadonlyPets::from_storage(&deps.storage);
+        //let pets = ReadonlyPets::from_storage(&deps.storage);
+        let pets = Pets::from_storage(&mut deps.storage);
         mocked_pets.iter().enumerate().for_each(|(i, mocked_pet)| {
             let canonical_address = to_canonical(SENDERS[i], &deps.api);
             let pet = pets.get(&canonical_address).unwrap();
