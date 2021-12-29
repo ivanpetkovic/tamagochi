@@ -29,7 +29,7 @@ pub struct State {
 }
 
 pub fn config<S: Storage>(storage: &mut S) -> Singleton<S, State> {
-    singleton(storage, PET_KEY)
+    singleton(storage, CONFIG_KEY)
 }
 
 pub fn config_read<S: Storage>(storage: &S) -> ReadonlySingleton<S, State> {

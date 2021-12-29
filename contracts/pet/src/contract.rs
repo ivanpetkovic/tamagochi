@@ -82,14 +82,21 @@ fn try_feed<S: Storage, A: Api, Q: Querier>(
     amount: Uint128,
 ) -> StdResult<HandleResponse> {
     let time = env.block.time;
-    let state = config_read(&deps.storage).load()?;
+    let state = match config_read(&deps.storage).load() {
+        Ok(state) => state,
+        Err(err) => {
+            return Err(StdError::not_found("Config not found"));
+        }
+    };
     let mut pets = Pets::from_storage(&mut deps.storage);
     let user_address = deps.api.canonical_address(&sender)?;
     let mut pet ;
 
-    match pets.get(&user_address) {
-        Some(found_pet) => pet = found_pet,
-        None => pet = Pet::new(time, DEFAULT_SATIATED_TIME, DEFAULT_STARVING_TIME, None),
+    println!("pet set");
+    if let Some(found_pet) = pets.get(&user_address) {
+        pet = found_pet;
+    } else {
+        return Err(StdError::generic_err("You don't have a pet"));
     }
     if pet.is_dead(time) {
         return Err(StdError::generic_err("Pet is dead :("));
@@ -114,7 +121,7 @@ fn try_feed<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages: vec![burn_msg],
         log: vec![log("current_time", time), log("is_hungry", time)],
-        data: Some(to_binary(&HandleAnswer::SetName {
+        data: Some(to_binary(&HandleAnswer::Feed {
             status: ResponseStatus::Success,
         })?),
     })
@@ -184,6 +191,7 @@ mod tests {
     use crate::state::ReadonlyPets;
 
     use super::*;
+    use bincode2::config;
     use cosmwasm_std::testing::{mock_dependencies, mock_env, MockApi, MockQuerier, MockStorage};
     use cosmwasm_std::{coins, CanonicalAddr};
 
@@ -205,21 +213,19 @@ mod tests {
             token_code_hash: FOOD_CODE_HASH.to_string(),
         };
         let mut pets = Pets::from_storage(&mut deps.storage);
-        // should I bother adding 20 bytes long address? snip20 implementation doesn't
         initial_pets.iter().enumerate().for_each(|(i, pet)| {
             let cannonical_address = deps
                 .api
                 .canonical_address(&HumanAddr(SENDERS[i].to_string()))
                 .unwrap();
-            let serialized = bincode2::serialize(&pet).unwrap();
-            println!(
-                "adr:{}, bin_adr:{:?} ser:{:?}, pet:{:?}",
-                &cannonical_address,
-                cannonical_address.as_slice(),
-                &serialized,
-                &pet
-            );
-            // deps.storage.set(cannonical_address.as_slice(), &serialized);
+            // let serialized = bincode2::serialize(&pet).unwrap();
+            // println!(
+            //     "adr:{}, bin_adr:{:?} ser:{:?}, pet:{:?}",
+            //     &cannonical_address,
+            //     cannonical_address.as_slice(),
+            //     &serialized,
+            //     &pet
+            // );
             pets.set(&cannonical_address, &pet);
         });
         let env = mock_env("creator", &coins(1000, "FOOD"));
@@ -242,11 +248,13 @@ mod tests {
         pets.push(Pet::new(time, 1, 20, Some("Frey")));
         pets
     }
+    
     /// Converts given address string into canonical address
     fn to_canonical<A: Api>(address: &str, api: &A) -> CanonicalAddr {
         api.canonical_address(&HumanAddr(address.to_string()))
             .unwrap()
     }
+
     #[test]
     fn proper_initialization() {
         let mocked_pets = create_pets();
@@ -275,7 +283,7 @@ mod tests {
     }
 
     #[test]
-    fn test_query_pet_name() {
+    fn test_query_pet() {
         let mocked_pets = create_pets();
         let (_init_result, deps) = init_helper(&mocked_pets);
         let pets = ReadonlyPets::from_storage(&deps.storage);
@@ -326,8 +334,8 @@ mod tests {
             HandleAnswer::SetName { status } => {
                 assert_eq!(status, ResponseStatus::Success);
             }
+            HandleAnswer::Feed { status } => assert!(false),
         }
-        // for some reason, query returs old pet name
         let query_res = query(
             &deps,
             QueryMsg::Pet {
@@ -343,50 +351,36 @@ mod tests {
         }
     }
 
-    // #[test]
-    // fn increment() {
-    //     let mut deps = mock_dependencies(20, &coins(2, "token"));
 
-    //     let msg = InitMsg { count: 17 };
-    //     let env = mock_env("creator", &coins(2, "token"));
-    //     let _res = init(&mut deps, env, msg).unwrap();
+    #[test]
+    fn test_feed_pet() {
+        let mocked_pets = create_pets();
+        let (_init_result, mut deps) = init_helper(&mocked_pets);
+        let creator = SENDERS[0];
+        let food_token_address = HumanAddr(FOOD_ADDRESS.to_string());
+        let viewing_key = "proper-viewing-key".to_string();
+        let env = mock_env(creator, &coins(1000, "FOOD"));
+        let owner = HumanAddr(SENDERS[0].to_string());
+        let msg = HandleMsg::Receive {
+            sender: owner.clone(),
+            from: owner.clone(),
+            amount: Uint128(100),
+            msg: None,
+        };
+        let cfg = config_read(&deps.storage).load();
+        println!("cfg {:?}", cfg);
+        let res = handle(&mut deps, env, msg);
+        println!("{:?}", res);
+        let serialized_answer = res.unwrap().data.unwrap();
+        match from_binary(&serialized_answer).unwrap() {
+            HandleAnswer::Feed { status } => {
+                assert_eq!(status, ResponseStatus::Success);
+            }
+            HandleAnswer::SetName { status } => {
+                assert!(false);
+            }
+        }
+        
+    }
 
-    //     // anyone can increment
-    //     let env = mock_env("anyone", &coins(2, "token"));
-    //     let msg = HandleMsg::Increment {};
-    //     let _res = handle(&mut deps, env, msg).unwrap();
-
-    //     // should increase counter by 1
-    //     let res = query(&deps, QueryMsg::GetCount {}).unwrap();
-    //     let value: CountResponse = from_binary(&res).unwrap();
-    //     assert_eq!(18, value.count);
-    // }
-
-    // #[test]
-    // fn reset() {
-    //     let mut deps = mock_dependencies(20, &coins(2, "token"));
-
-    //     let msg = InitMsg { count: 17 };
-    //     let env = mock_env("creator", &coins(2, "token"));
-    //     let _res = init(&mut deps, env, msg).unwrap();
-
-    //     // not anyone can reset
-    //     let unauth_env = mock_env("anyone", &coins(2, "token"));
-    //     let msg = HandleMsg::Reset { count: 5 };
-    //     let res = handle(&mut deps, unauth_env, msg);
-    //     match res {
-    //         Err(StdError::Unauthorized { .. }) => {}
-    //         _ => panic!("Must return unauthorized error"),
-    //     }
-
-    //     // only the original creator can reset the counter
-    //     let auth_env = mock_env("creator", &coins(2, "token"));
-    //     let msg = HandleMsg::Reset { count: 5 };
-    //     let _res = handle(&mut deps, auth_env, msg).unwrap();
-
-    //     // should now be 5
-    //     let res = query(&deps, QueryMsg::GetCount {}).unwrap();
-    //     let value: CountResponse = from_binary(&res).unwrap();
-    //     assert_eq!(5, value.count);
-    // }
 }

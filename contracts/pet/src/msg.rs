@@ -58,5 +58,8 @@ pub enum ResponseStatus {
 pub enum HandleAnswer {
     SetName {
         status: ResponseStatus
+    },
+    Feed {
+        status: ResponseStatus
     }
 }
