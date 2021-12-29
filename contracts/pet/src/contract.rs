@@ -357,7 +357,6 @@ mod tests {
         let mocked_pets = create_pets();
         let (_init_result, mut deps) = init_helper(&mocked_pets);
         let creator = SENDERS[0];
-        let food_token_address = HumanAddr(FOOD_ADDRESS.to_string());
         let viewing_key = "proper-viewing-key".to_string();
         let env = mock_env(creator, &coins(1000, "FOOD"));
         let owner = HumanAddr(SENDERS[0].to_string());
